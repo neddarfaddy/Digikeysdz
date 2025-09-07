@@ -26,7 +26,7 @@
     .nav{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;width:100%}
     .nav-left{justify-self:start;display:flex;align-items:center;gap:12px}
     .nav-center{justify-self:center;display:flex;align-items:center}
-    .nav-right{justify-self:end;display:flex;align-items:center}
+    .nav-right{justify-self=end;display:flex;align-items:center}
     .hamburger{width:28px;height:22px}
     .logo{height:22px}
     .cart-link,.icon-btn{background:transparent;border:none;padding:0;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
@@ -175,7 +175,6 @@
         <input type="hidden" name="_subject" value="New Order - Digikeys">
         <input type="hidden" name="_captcha" value="false">
         <input type="hidden" name="_template" value="table">
-        <!-- <input type="hidden" name="_next" value="https://your-site.com/thanks.html"> -->
 
         <div class="cart-items" id="cartItems"></div>
 
@@ -261,8 +260,6 @@
     </div>
     <section class="hero">
       <div class="slides" id="slides">
-        
-        
         <div class="slide" style="background-image:url(./imgs/Silksong_desktop.webp);"><span class="pill">NEW RELEASE</span></div>
         <div class="slide" style="background-image:url(./imgs/Helldivers.webp);"><span class="pill">HOT DEAL</span></div>
         <div class="slide" style="background-image:url(./imgs/MetalGearSnakeEater.webp);"><span class="pill">SHOP NOW</span></div>
@@ -287,38 +284,48 @@
     function play(){ clearInterval(sliderTimer); sliderTimer=setInterval(()=>goSlide(si+1), 4000);}
     dots.forEach(d=>d.onclick=e=>{ goSlide(+e.target.dataset.i); play();}); play();
 
-    /* Covers (optional RAWG) */
-    const RAWG_KEY = "";
-    const RAWG_PLATFORMS = { "PC": 4, "PS5": 187, "Xbox": 186, "Switch": 7 };
+    /* Covers via RAWG→Steam proxy */
+    const R2S_API = "https://rawg2steam.phalco.de/api";
     const coverCache = JSON.parse(localStorage.getItem('dk_cover_cache') || '{}');
     const cachePut = (k,v)=>{ coverCache[k]=v; localStorage.setItem('dk_cover_cache', JSON.stringify(coverCache)); };
-    async function fetchCover(title, platform){
-      const cacheKey = `${title}|${platform}`;
-      if(coverCache[cacheKey]) return coverCache[cacheKey];
-      if(!RAWG_KEY) return null;
-      try{
-        const platformId = RAWG_PLATFORMS[platform] || '';
-        const url = new URL('https://api.rawg.io/api/games');
-        url.searchParams.set('key', RAWG_KEY);
-        url.searchParams.set('search', title.replace(/[®™:]/g,'').trim());
-        if(platformId) url.searchParams.set('platforms', platformId);
-        url.searchParams.set('page_size','1');
-        url.searchParams.set('ordering','-rating');
-        url.searchParams.set('search_precise','true');
-        const res = await fetch(url.toString());
-        if(!res.ok) throw new Error('RAWG error');
-        const data = await res.json();
-        let item = data.results && data.results[0];
-        let img = item && (item.background_image || item.background_image_additional);
-        if(!img){
-          const u2 = new URL(url); u2.searchParams.delete('platforms');
-          const r2 = await fetch(u2.toString());
-          if(r2.ok){ const d2 = await r2.json(); item = d2.results && d2.results[0]; img = item && (item.background_image || item.background_image_additional); }
-        }
-        if(img){ cachePut(cacheKey, img); return img; }
-      }catch(e){}
-      return null;
+
+    function normTitle(s){
+      return s
+        .toLowerCase()
+        .replace(/[®™:]/g, "")
+        .replace(/[^a-z0-9 ]+/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
     }
+    function pick(obj, keys){ for(const k of keys){ if(obj && obj[k]) return obj[k]; } return null; }
+
+    async function fetchCover(title, platform){
+      const q = encodeURIComponent(title);
+      const url = `${R2S_API}/games?search=${q}`;
+      try{
+        const res = await fetch(url, { mode: "cors" });
+        if(!res.ok) throw new Error("R2S search failed");
+        const data = await res.json();
+        const results = data?.results || data || [];
+        const want = normTitle(title);
+        let best = null, bestScore = -1;
+        for(const item of results){
+          const name = normTitle(item.name || item.title || "");
+          let score = 0;
+          while(score < Math.min(name.length, want.length) && name[score] === want[score]) score++;
+          if(score > bestScore){ best = item; bestScore = score; }
+        }
+        if(!best) return null;
+        const img = pick(best, [
+          "background_image","background_image_additional",
+          "header_image","capsule_image","image","background"
+        ]);
+        return img || null;
+      }catch(e){
+        return null;
+      }
+    }
+
     const COVER_PLACEHOLDER = "data:image/svg+xml;utf8," + encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' width='300' height='400'><defs><linearGradient id='g' x1='0' x2='1' y1='0' y2='1'><stop offset='0' stop-color='#3d3b7a'/><stop offset='1' stop-color='#1f1e4d'/></linearGradient></defs><rect width='100%' height='100%' fill='url(#g)'/></svg>`);
 
     const TOP_200 = ["EA SPORTS FC 25","EA SPORTS FC 24","Battlefield 2042","Battlefield V","Battlefield 1","Call of Duty: Modern Warfare II (2022)","Call of Duty: Modern Warfare III (2023)","Hogwarts Legacy","Elden Ring","Baldur's Gate 3","Red Dead Redemption 2","Cyberpunk 2077","The Witcher 3: Wild Hunt","Forza Horizon 5","God of War Ragnarök","Ghost of Tsushima Director's Cut","Marvel’s Spider-Man 2","Starfield","Helldivers 2","Palworld"];
@@ -433,7 +440,7 @@
     openCartBtn.onclick = openCartDrawer;
     closeCartBtn.onclick = closeCartDrawer;
     openMenuBtn.onclick = openMenuDrawer;
-    closeMenuBtn.onclick = closeMenuBtn.onclick = closeMenuDrawer;
+    closeMenuBtn.onclick = closeMenuDrawer;
     backdrop.onclick = ()=>{ closeCartDrawer(); closeMenuDrawer(); };
 
     const cartItemsEl = document.getElementById('cartItems');
@@ -550,4 +557,4 @@
     function closeMenuDrawer(){ menuDrawer.classList.remove('open'); hideBackdropIfNone(); }
   </script>
 </body>
-</html>
+</html>      
