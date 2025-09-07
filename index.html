@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Digikeys</title>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://wsrv.nl" crossorigin>
   <style>
     :root{
       --page-bg:#1b193b; --app-bg:#151437; --nav-bg:#2c2f66;
@@ -26,7 +27,7 @@
     .nav{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;width:100%}
     .nav-left{justify-self:start;display:flex;align-items:center;gap:12px}
     .nav-center{justify-self:center;display:flex;align-items:center}
-    .nav-right{justify-self=end;display:flex;align-items:center}
+    .nav-right{justify-self:end;display:flex;align-items:center}
     .hamburger{width:28px;height:22px}
     .logo{height:22px}
     .cart-link,.icon-btn{background:transparent;border:none;padding:0;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
@@ -55,7 +56,8 @@
     .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
     .card{background:var(--card);border-radius:16px;overflow:hidden;transition:transform .15s ease,background .15s ease}
     .card:hover{transform:translateY(-2px);background:var(--card-hover)}
-    .thumb{position:relative;aspect-ratio:3/4;background:#262557 center/cover no-repeat}
+    .thumb{position:relative;aspect-ratio:3/4;background:#262557}
+    .thumb img.cover{width:100%;height:100%;object-fit:cover;display:block}
     .badge{position:absolute;right:8px;bottom:8px;background:var(--chip-red);color:#fff;font-weight:500;font-size:11px;padding:6px 8px;border-radius:999px}
     .platform{position:absolute;left:8px;bottom:8px;width:18px;height:18px;border-radius:50%;background:#0008;border:1px solid #fff3}
     .card-body{padding:10px 12px 12px}
@@ -77,8 +79,8 @@
     .x{background:none;border:none;color:#fff;font-size:20px}
 
     .cart-items{display:grid;gap:10px;margin-bottom:14px}
-    .cart-item{display:grid;grid-template-columns:56px 1fr auto;gap:10px;align-items:center;background:#161741;border-radius:12px;padding:8px}
     .cart-item img{width:56px;height:56px;border-radius:8px;object-fit:cover;background:#2a295d}
+    .cart-item{display:grid;grid-template-columns:56px 1fr auto;gap:10px;align-items:center;background:#161741;border-radius:12px;padding:8px}
     .qty{display:flex;align-items:center;gap:8px}
     .qty button{width:26px;height:26px;border:none;border-radius:8px;background:#282a60;color:#fff}
     .remove{background:none;border:none;color:#ff7b86}
@@ -115,7 +117,6 @@
     .chev{opacity:.7}
     .sep{height:1px;background:#2a2b55;margin:8px 16px}
 
-    /* 🔧 Restored button styling */
     .btn-primary{height:42px;border:none;border-radius:10px;background:var(--accent);color:#07101c;font-weight:500}
   </style>
 </head>
@@ -168,9 +169,7 @@
       <button class="x" id="closeCart" aria-label="Close">✕</button>
     </div>
 
-    <!-- Keep the body scrollable, footer sticky -->
     <div class="drawer-body">
-      <!-- Form lives INSIDE the scroll area -->
       <form id="orderForm" method="POST" action="https://formsubmit.co/digikeysdz@gmail.com" enctype="multipart/form-data">
         <input type="hidden" name="_subject" value="New Order - Digikeys">
         <input type="hidden" name="_captcha" value="false">
@@ -230,7 +229,6 @@
         </div>
         <p class="small">Orders are sent to <strong>digikeysdz@gmail.com</strong>. You’ll receive a confirmation reply.</p>
 
-        <!-- Hidden summary fields -->
         <input type="hidden" name="items" id="f_items">
         <input type="hidden" name="subtotal_pretty" id="f_subtotal">
         <input type="hidden" name="fee_pretty" id="f_fee">
@@ -242,7 +240,6 @@
       </form>
     </div>
 
-    <!-- Sticky footer OUTSIDE the form -->
     <div class="drawer-foot">
       <button class="btn-primary" id="sendOrder" type="submit" form="orderForm">Send Order</button>
       <button class="btn" id="clearCart" type="button" style="background:#2a2b55;color:#fff;">Clear Cart</button>
@@ -284,46 +281,151 @@
     function play(){ clearInterval(sliderTimer); sliderTimer=setInterval(()=>goSlide(si+1), 4000);}
     dots.forEach(d=>d.onclick=e=>{ goSlide(+e.target.dataset.i); play();}); play();
 
-    /* Covers via RAWG→Steam proxy */
-    const R2S_API = "https://rawg2steam.phalco.de/api";
+    /* =========================
+       Covers via RAWG→Steam proxy
+       FAST mode: parallel race + concurrency + lazy + CDN thumb
+       ========================= */
+    const PRIVATE_PROXY = ""; // e.g. "https://covers.yourname.workers.dev"
+    const R2S_ORIGIN = "https://rawg2steam.phalco.de/api";
+
+    // Speed knobs
+    const COVER_TIMEOUT_MS = 2500;      // max wait per source
+    const COVER_CONCURRENCY = 4;        // how many lookups at once
+    const SKIP_COVERS = false;          // true = no remote cover fetches (placeholders only)
+
     const coverCache = JSON.parse(localStorage.getItem('dk_cover_cache') || '{}');
     const cachePut = (k,v)=>{ coverCache[k]=v; localStorage.setItem('dk_cover_cache', JSON.stringify(coverCache)); };
 
     function normTitle(s){
-      return s
+      return (s||"")
         .toLowerCase()
-        .replace(/[®™:]/g, "")
-        .replace(/[^a-z0-9 ]+/g, " ")
-        .replace(/\s+/g, " ")
+        .replace(/[®™:]/g,"")
+        .replace(/[^a-z0-9 ]+/g," ")
+        .replace(/\s+/g," ")
         .trim();
     }
     function pick(obj, keys){ for(const k of keys){ if(obj && obj[k]) return obj[k]; } return null; }
-
-    async function fetchCover(title, platform){
-      const q = encodeURIComponent(title);
-      const url = `${R2S_API}/games?search=${q}`;
-      try{
-        const res = await fetch(url, { mode: "cors" });
-        if(!res.ok) throw new Error("R2S search failed");
-        const data = await res.json();
-        const results = data?.results || data || [];
-        const want = normTitle(title);
-        let best = null, bestScore = -1;
-        for(const item of results){
-          const name = normTitle(item.name || item.title || "");
-          let score = 0;
-          while(score < Math.min(name.length, want.length) && name[score] === want[score]) score++;
-          if(score > bestScore){ best = item; bestScore = score; }
-        }
-        if(!best) return null;
-        const img = pick(best, [
-          "background_image","background_image_additional",
-          "header_image","capsule_image","image","background"
-        ]);
-        return img || null;
-      }catch(e){
-        return null;
+    function bestByTitle(results, want){
+      let best=null, bestScore=-1;
+      for(const item of results){
+        const name = normTitle(item?.name || item?.title || "");
+        let score=0; while(score<Math.min(name.length,want.length) && name[score]===want[score]) score++;
+        if(score>bestScore){ best=item; bestScore=score; }
       }
+      return best;
+    }
+
+    // Proxy any remote image through wsrv.nl to get a small, cached, CORS-clean WebP
+    function thumbProxy(url){
+      if(!url || url.startsWith('data:')) return url;
+      return `https://wsrv.nl/?url=${encodeURIComponent(url)}&w=300&h=400&fit=cover&output=webp`;
+    }
+
+    // ---- FAST fetch helpers (parallel race with timeout) ----
+    function withTimeout(promise, ms) {
+      return Promise.race([
+        promise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), ms))
+      ]);
+    }
+    function sourceUrlsFor(rawUrl) {
+      const urls = [];
+      if (PRIVATE_PROXY) urls.push(`${PRIVATE_PROXY}?url=${encodeURIComponent(rawUrl)}`);
+      urls.push(rawUrl);
+      urls.push(`https://cors.isomorphic-git.org/${rawUrl}`);
+      urls.push(`https://corsproxy.io/?${encodeURIComponent(rawUrl)}`);
+      urls.push(`https://thingproxy.freeboard.io/fetch/${rawUrl}`);
+      const u = new URL(rawUrl);
+      urls.push(`https://r.jina.ai/${u.protocol}//${u.host}${u.pathname}${u.search}`);
+      return urls;
+    }
+    async function fetchJSONFast(rawUrl) {
+      const urls = sourceUrlsFor(rawUrl);
+      const attempts = urls.map(u =>
+        withTimeout(
+          fetch(u, { mode: "cors" })
+            .then(res => { if (!res.ok) throw new Error("http " + res.status); return res.text(); })
+            .then(txt => {
+              const cleaned = txt.trim().replace(/^[^{\[]+/, "");
+              return JSON.parse(cleaned);
+            }),
+          COVER_TIMEOUT_MS
+        )
+      );
+      try {
+        return await Promise.any(attempts);
+      } catch {
+        throw new Error("all cover sources failed");
+      }
+    }
+
+    // ---- tiny concurrency gate ----
+    let coverInFlight = 0;
+    const coverQueue = [];
+    function scheduleCover(taskFn) {
+      return new Promise((resolve) => {
+        coverQueue.push({ taskFn, resolve });
+        runCoverQueue();
+      });
+    }
+    function runCoverQueue() {
+      while (coverInFlight < COVER_CONCURRENCY && coverQueue.length) {
+        const { taskFn, resolve } = coverQueue.shift();
+        coverInFlight++;
+        taskFn()
+          .then(resolve)
+          .catch(()=>{}) // swallow; we keep placeholder
+          .finally(()=>{ coverInFlight--; runCoverQueue(); });
+      }
+    }
+
+    async function fetchCover(title) {
+      if (SKIP_COVERS) return null;
+      const q = encodeURIComponent(title);
+      const url = `${R2S_ORIGIN}/games?search=${q}`;
+      const data = await fetchJSONFast(url);
+      const results = Array.isArray(data) ? data : (data?.results || []);
+      if (!results.length) return null;
+
+      const want = normTitle(title);
+      const best = bestByTitle(results, want) || results[0];
+      const img = pick(best, [
+        "background_image","background_image_additional",
+        "header_image","capsule_image","image","background",
+      ]) || (best?.screenshots && best.screenshots[0]?.image) || (best?.images && best.images[0]) || null;
+
+      return img || null;
+    }
+
+    async function maybeFetchCover(p){
+      if (!p._needsCover || SKIP_COVERS) return;
+
+      // Dedup by title across all platforms (incl. PC Offline)
+      const reuseKey = p.title;
+
+      if (coverCache[reuseKey]) {
+        updateThumb(p.id, coverCache[reuseKey]);
+        const offId = `${p.title.replace(/[^a-z0-9]/ig,'_')}_PC_OFFLINE`;
+        updateThumb(offId, coverCache[reuseKey]);
+        return;
+      }
+
+      await scheduleCover(async () => {
+        const cover = await fetchCover(p.title);
+        if (cover) {
+          cachePut(reuseKey, cover);
+          updateThumb(p.id, cover);
+          const offId = `${p.title.replace(/[^a-z0-9]/ig,'_')}_PC_OFFLINE`;
+          updateThumb(offId, cover);
+        }
+      });
+    }
+
+    function updateThumb(id, url){
+      const img = document.querySelector(`[data-thumb-for="${id}"] img.cover`);
+      if(img){ img.src = thumbProxy(url); }
+      const card = img?.closest('.card');
+      if(card){ card.dataset.img = thumbProxy(url); }
     }
 
     const COVER_PLACEHOLDER = "data:image/svg+xml;utf8," + encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' width='300' height='400'><defs><linearGradient id='g' x1='0' x2='1' y1='0' y2='1'><stop offset='0' stop-color='#3d3b7a'/><stop offset='1' stop-color='#1f1e4d'/></linearGradient></defs><rect width='100%' height='100%' fill='url(#g)'/></svg>`);
@@ -349,14 +451,28 @@
     const searchEl = document.getElementById('searchInput');
 
     function platformMatch(p){ if(state.platform==="All") return true; if(state.platform==="PC") return p.platform.startsWith("PC"); return p.platform===state.platform; }
+
+    // Lazy cover observer: start fetching a bit before visible
+    const coverObserver = new IntersectionObserver((entries) => {
+      entries.forEach(ent => {
+        if (ent.isIntersecting) {
+          const id = ent.target.getAttribute('data-thumb-for');
+          const p = PRODUCTS.find(x => x.id === id);
+          if (p) maybeFetchCover(p);
+          coverObserver.unobserve(ent.target);
+        }
+      });
+    }, { root: null, rootMargin: "200px" });
+
     function applyFilters(){
       const q = state.q.toLowerCase();
       state.filtered = PRODUCTS.filter(p=> platformMatch(p) && ((p.title + " " + p.platform).toLowerCase().includes(q)) );
       state.pageIndex = 0; productsEl.innerHTML = ""; renderNextPage();
     }
     function cardHTML(p){
-      return `<article class="card" data-id="${p.id}" data-name="${p.name}" data-price="${p.price}" data-img="${p.img}">
-        <div class="thumb" data-thumb-for="${p.id}" style="background-image:url(${p.img});">
+      return `<article class="card" data-id="${p.id}" data-name="${p.name}" data-price="${p.price}" data-img="${thumbProxy(p.img)}">
+        <div class="thumb" data-thumb-for="${p.id}">
+          <img class="cover" src="${thumbProxy(p.img)}" alt="${p.title}" loading="lazy" decoding="async" referrerpolicy="no-referrer">
           <span class="platform" title="${p.platform}"></span>
           ${p.discount>0 ? `<span class="badge">${p.discount}% OFF</span>` : ``}
         </div>
@@ -374,32 +490,17 @@
       productsEl.insertAdjacentHTML('beforeend', slice.map(cardHTML).join(''));
       state.pageIndex++;
       loadMoreBtn.style.display = state.pageIndex * state.pageSize < state.filtered.length ? 'inline-block' : 'none';
-      slice.forEach(p=> maybeFetchCover(p));
+      // Observe thumbs for lazy cover fetching
+      slice.forEach(p => {
+        const el = document.querySelector(`[data-thumb-for="${p.id}"]`);
+        if (el) coverObserver.observe(el);
+      });
     }
     loadMoreBtn.onclick = renderNextPage;
 
     tabsEl.addEventListener('click', (e)=>{ const btn = e.target.closest('.tab'); if(!btn) return; tabsEl.querySelectorAll('.tab').forEach(t=>t.classList.remove('active')); btn.classList.add('active'); state.platform = btn.dataset.platform; applyFilters(); });
     searchEl.addEventListener('input', ()=>{ state.q = searchEl.value.trim(); applyFilters(); });
     applyFilters();
-
-    async function maybeFetchCover(p){
-      if(!p._needsCover) return;
-      const realPlatform = p.platform === "PC Offline" ? "PC" : p.platform;
-      const reuseKey = `${p.title}|${realPlatform}`;
-      if(coverCache[reuseKey]){ updateThumb(p.id, coverCache[reuseKey]); return; }
-      const cover = await fetchCover(p.title, realPlatform);
-      if(cover){
-        cachePut(reuseKey, cover);
-        updateThumb(p.id, cover);
-        if(realPlatform==="PC"){ const offId = `${p.title.replace(/[^a-z0-9]/ig,'_')}_PC_OFFLINE`; updateThumb(offId, cover); }
-      }
-    }
-    function updateThumb(id, url){
-      const el = document.querySelector(`[data-thumb-for="${id}"]`);
-      if(el){ el.style.backgroundImage = `url(${url})`; }
-      const card = el?.closest('.card');
-      if(card){ card.dataset.img = url; }
-    }
 
     /* Cart */
     const cart = {
@@ -435,7 +536,11 @@
     function closeCartDrawer(){ cartDrawer.classList.remove('open'); hideBackdropIfNone(); }
     function openMenuDrawer(){ menuDrawer.classList.add('open'); backdrop.classList.add('show'); }
     function closeMenuDrawer(){ menuDrawer.classList.remove('open'); hideBackdropIfNone(); }
-    function hideBackdropIfNone(){ if(!cartDrawer.classList.contains('open') && !menuDrawer.classList.contains('open')){ backdrop.classList.remove('show'); } }
+    function hideBackdropIfNone(){
+      if(!cartDrawer.classList.contains('open') && !menuDrawer.classList.contains('open')){
+        backdrop.classList.remove('show');
+      }
+    }
 
     openCartBtn.onclick = openCartDrawer;
     closeCartBtn.onclick = closeCartDrawer;
@@ -549,12 +654,7 @@
       document.getElementById('f_flexy_time').value = (method==='flexy') ? document.getElementById('flexyTime').value : '';
       document.getElementById('f_flexy_amount').value = (method==='flexy') ? `${document.getElementById('flexyAmount').value} DA` : '';
       document.getElementById('f_notes').value = document.getElementById('notes').value.trim();
-      // let it submit
     });
-
-    /* Drawer open/close helpers */
-    function openCartDrawer(){ cartDrawer.classList.add('open'); backdrop.classList.add('show'); }
-    function closeMenuDrawer(){ menuDrawer.classList.remove('open'); hideBackdropIfNone(); }
   </script>
-</body>
-</html>      
+</body> 
+</html>
