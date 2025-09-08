@@ -35,7 +35,7 @@
     a{ color:inherit; text-decoration:none }
     img{ display:block; max-width:100% }
 
-    /* Visually-hidden utility for a11y (used in ✕ remove button) */
+    /* Visually-hidden utility (used in ✕ remove button) */
     .sr-only{
       position:absolute; width:1px; height:1px; padding:0; margin:-1px;
       overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0;
@@ -143,12 +143,12 @@
     .cart-item img{ width:56px; height:56px; border-radius:8px; object-fit:cover; background:#2a295d }
     .cart-item{
       display:grid; grid-template-columns:56px 1fr auto; gap:10px; align-items:center;
-      background:#161741; border-radius:12px; padding:8px; overflow:visible; /* prevent clipping of buttons */
+      background:#161741; border-radius:12px; padding:8px; overflow:visible;
     }
     .qty{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:2px; overflow:visible }
     .qty button{ width:32px; height:32px; border:none; border-radius:8px; background:#282a60; color:#fff; font-weight:500; cursor:pointer }
 
-    /* ✕ Remove button (icon-only visual, accessible label included) */
+    /* ✕ Remove button (icon-only) */
     .remove{
       display:inline-flex; align-items:center; justify-content:center;
       width:32px; height:32px; border:none; border-radius:8px;
@@ -265,7 +265,7 @@
     </div>
 
     <div class="drawer-body">
-      <!-- Order form: posts to FormSubmit (no server needed) -->
+      <!-- Order form: posts to FormSubmit (no server) -->
       <form id="orderForm" method="POST" action="https://formsubmit.co/digikeysdz@gmail.com" enctype="multipart/form-data">
         <!-- FormSubmit config -->
         <input type="hidden" name="_subject" value="New Order - Digikeys">
@@ -392,7 +392,7 @@
 
   <script>
     /* =========================================================
-       SLIDER (HERO)
+       HERO SLIDER
        ========================================================= */
     const slides = document.getElementById('slides');
     const dots = Array.from(document.querySelectorAll('#dots .dot'));
@@ -408,29 +408,101 @@
     play();
 
     /* =========================================================
-       COVER CONFIG (Manual-only fallback)
+       MANUAL METADATA (Covers + Prices + Discounts)
+       HOW TO USE:
+       - COVERS: one entry per game title (applies to all platforms).
+       - PRICE_OVERRIDES / DISCOUNT_OVERRIDES: per title or "Title|Platform".
+       - If no override, auto-calculated price/discount is used.
        ========================================================= */
-    const COVERS = {
 
-      // Add more manual covers here as you collect them
+    // One cover per game (title-only). Use root-relative paths or full URLs.
+    const COVERS = {
+      // Examples:
+  "Elden Ring": "./imgs/covers/./elden_ring_pc.webp",
+  "EA Sports FC 25": "./imgs/covers/./fc25Cover.webp",
+      // "The Last of Us Part I": "/imgs/covers/tlou_part1.webp",
+      // "EA Sports FC 25": "/imgs/covers/fc25.webp",
     };
-    const SKIP_COVERS = true; // RAWG disabled; manual-only
+
+    const PRICE_OVERRIDES = {
+      // "Elden Ring|PC": 7000,
+      // "Hollow Knight": 2200, // applies to every platform unless a platform-specific key exists
+    };
+
+    const DISCOUNT_OVERRIDES = {
+      // "EA Sports FC 25|PS5": 15,
+      // "Control Ultimate Edition": 40,
+    };
+
+    /* Image helpers */
+    // Only proxy absolute http(s) URLs; keep local/relative paths as-is.
     function thumbProxy(url){
-      if(!url || url.startsWith('data:')) return url;
+      if (!url || url.startsWith('data:')) return url;
+      if (!/^https?:\/\//i.test(url)) return url;   // local path => don't proxy
       return `https://wsrv.nl/?url=${encodeURIComponent(url)}&w=300&h=400&fit=cover&output=webp`;
     }
+
+    // Placeholder if a cover is missing
     const COVER_PLACEHOLDER =
       "data:image/svg+xml;utf8," +
       encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' width='300' height='400'><defs><linearGradient id='g' x1='0' x2='1' y1='0' y2='1'><stop offset='0' stop-color='#3d3b7a'/><stop offset='1' stop-color='#1f1e4d'/></linearGradient></defs><rect width='100%' height='100%' fill='url(#g)'/></svg>`);
 
+    // Title-only cover; applies to all platforms
+    function coverFor(title){
+      const src = COVERS[title];
+      if (!src) console.warn(`[COVERS] Missing cover for: "${title}"`);
+      return thumbProxy(src || COVER_PLACEHOLDER);
+    }
+
     /* =========================================================
-       TITLES SOURCE (Base + Auto-extended series >300)
+       TITLES SOURCE (Top-first list + Annuals)
        ========================================================= */
     const TITLE_BASE = `
-Elden Ring|Elden Ring: Nightreign|Baldur’s Gate 3|Cyberpunk 2077|Red Dead Redemption 2|The Witcher 3: Wild Hunt|Assassin’s Creed Shadows|Mafia: The Old Country|Metal Gear Solid Δ: Snake Eater|Doom: The Dark Ages|The Elder Scrolls IV: Oblivion Remastered|Death Stranding 2: On the Beach|Monster Hunter Wilds|God of War Ragnarök|Marvel’s Spider-Man 2|The Last of Us Part I|The Last of Us Part II|Horizon Forbidden West|Ghost of Tsushima Director’s Cut|Starfield|Palworld|Borderlands 4|Kingdom Come Deliverance 2|Hollow Knight: Silksong|Helldivers 2|Hogwarts Legacy|Alan Wake II|Resident Evil 4 (Remake)|Resident Evil Village|Final Fantasy VII Rebirth|Persona 3 Reload|Like a Dragon: Infinite Wealth|Sekiro: Shadows Die Twice|Bloodborne|Demon’s Souls (Remake)|Dark Souls III|Nioh 2|Wo Long: Fallen Dynasty|Batman: Arkham Knight|Suicide Squad: Kill the Justice League|Star Wars Jedi: Survivor|Diablo IV|VALORANT|Counter-Strike 2|Overwatch 2|Apex Legends|Destiny 2|Call of Duty: Black Ops 6 (2024)|EA Sports FC 25|Mario Kart World|The Legend of Zelda: Tears of the Kingdom|The Legend of Zelda: Breath of the Wild|Super Smash Bros. Ultimate|Super Mario Odyssey|Animal Crossing: New Horizons|Metroid Dread|God of War (2018)|Marvel’s Spider-Man|Marvel’s Spider-Man: Miles Morales|Horizon Zero Dawn|Death Stranding|Uncharted 4: A Thief’s End|Uncharted: The Lost Legacy|Gran Turismo 7|Halo Infinite|Gears 5|The Elder Scrolls V: Skyrim Special Edition|Fallout 4|DOOM Eternal|Control|Control Ultimate Edition|Resident Evil 2 (Remake)|Monster Hunter: World|Monster Hunter Rise|Street Fighter 6|Tekken 8|Mortal Kombat 1 (2023)|Mortal Kombat 11|Tom Clancy’s Rainbow Six Siege|The Crew Motorfest|The Crew 2|Far Cry 6|Far Cry 5|Far Cry 4|Far Cry 3|Assassin’s Creed Valhalla|Assassin’s Creed Odyssey|Assassin’s Creed Origins|Assassin’s Creed Mirage|NieR:Automata|Final Fantasy XVI|Final Fantasy VII Remake Intergrade|Persona 5 Royal|Yakuza: Like a Dragon|Judgment|Lost Judgment|Lies of P|Lords of the Fallen (2023)|Dead Space (Remake)|The Callisto Protocol|Gotham Knights|A Plague Tale: Requiem|Mass Effect Legendary Edition|Dragon Age: Inquisition|Dragon Age: Origins|Dragon Age II|Divinity: Original Sin 2|League of Legends|PUBG: Battlegrounds|Rocket League|Fortnite|Forza Horizon 5|Cities: Skylines II|Cities: Skylines|Sid Meier’s Civilization VI|Civilization 7|Age of Empires IV|Age of Empires II: Definitive Edition|Company of Heroes 3|It Takes Two|Outer Wilds|The Outer Worlds 2|The Outer Worlds|Detroit: Become Human|Dragon Ball FighterZ|EA Sports FC 24|FIFA 23|FIFA 22|Gran Turismo Sport|Gran Turismo 6|Battlefield 2042|Battlefield V|Battlefield 1|Battlefield 4|Call of Duty: Modern Warfare III (2023)|Call of Duty: Modern Warfare II (2022)|Call of Duty: Vanguard|Call of Duty: Black Ops Cold War|Far Cry Primal|Assassin’s Creed Syndicate|Assassin’s Creed Unity|Assassin’s Creed III Remastered|Assassin’s Creed II|Assassin’s Creed Brotherhood|Assassin’s Creed Revelations|NieR Replicant ver.1.22474487139...|Final Fantasy XV|Persona 4 Golden|Yakuza 0|Yakuza Kiwami|Yakuza Kiwami 2|Dishonored 2|Dishonored|Prey (2017)|Wolfenstein II: The New Colossus|Wolfenstein: The New Order|Amnesia: The Bunker|Amnesia: Rebirth|Outlast 2|Outlast|Heavy Rain|Beyond: Two Souls|Journey|ABZÛ|Limbo|Inside|Far: Changing Tides|Crysis 3 Remastered|Crysis 2 Remastered|Crysis Remastered|BioShock Infinite|Bioshock 2 Remastered|Bioshock Remastered|Planet Zoo|Planet Coaster|Total War: WARHAMMER III|Total War: WARHAMMER II|Total War: WARHAMMER|Total War: Three Kingdoms|Remnant II|Remnant: From the Ashes|Sifu|Kena: Bridge of Spirits|Ratchet & Clank: Rift Apart|Astro’s Playroom|Grounded|The Quarry|Until Dawn|CyberConnect2 Naruto Shippuden: Ultimate Ninja Storm 4|Dragon Ball Z: Kakarot|One Piece Odyssey|METAL GEAR SOLID V: The Phantom Pain|The Talos Principle II|Avowed|Slay the Spire 2|Light No Fire|Arc Raiders|Ghost of Yōtei|Clair Obscur: Expedition 33|Donkey Kong Bananza|Pokémon Scarlet|Pokémon Violet|Pokémon Sword|Pokémon Shield|Pokémon Legends: Arceus|Fire Emblem Engage|Fire Emblem: Three Houses|Xenoblade Chronicles 3|Xenoblade Chronicles 2|Splatoon 3|Splatoon 2|No Man’s Sky|Subnautica 2|Subnautica: Below Zero|Subnautica|Sea of Thieves|ARK: Survival Ascended|ARK: Survival Evolved|Rust|DayZ|The Sims 4|Need for Speed Unbound|Need for Speed Heat|Dirt Rally 2.0|WRC Generations
+Elden Ring|Elden Ring: Nightreign|Baldur’s Gate 3|Cyberpunk 2077|Red Dead Redemption 2|
+The Witcher 3: Wild Hunt|Assassin’s Creed Shadows|Mafia: The Old Country|Metal Gear Solid Δ: Snake Eater|
+Doom: The Dark Ages|The Elder Scrolls IV: Oblivion Remastered|Death Stranding 2: On the Beach|
+Monster Hunter Wilds|God of War Ragnarök|Marvel’s Spider-Man 2|The Last of Us Part I|The Last of Us Part II
+|Horizon Forbidden West|Ghost of Tsushima Director’s Cut|Starfield|Palworld|Borderlands 4|Kingdom Come Deliverance 2
+|Hollow Knight: Silksong|Helldivers 2|Hogwarts Legacy|Alan Wake II|Resident Evil 4 (Remake)|Resident Evil Village|
+Final Fantasy VII Rebirth|Persona 3 Reload|Like a Dragon: Infinite Wealth|Sekiro: Shadows Die Twice|Bloodborne|
+Demon’s Souls (Remake)|Dark Souls III|Nioh 2|Wo Long: Fallen Dynasty|Batman: Arkham Knight|
+Suicide Squad: Kill the Justice League|Star Wars Jedi: Survivor|Diablo IV|VALORANT|
+Counter-Strike 2|Overwatch 2|Apex Legends|Destiny 2|Call of Duty: Black Ops 6 (2024)|EA Sports FC 25|
+Mario Kart World|The Legend of Zelda: Tears of the Kingdom|The Legend of Zelda: Breath of the Wild|Super Smash Bros. Ultimate|Super Mario Odyssey|Animal Crossing: New Horizons|Metroid Dread|God of War (2018)|Marvel’s Spider-Man|Marvel’s Spider-Man: Miles Morales|Horizon Zero Dawn|Death Stranding|Uncharted 4: A Thief’s End|Uncharted: The Lost Legacy|Gran Turismo 7|Halo Infinite|Gears 5|The Elder Scrolls V: Skyrim Special Edition|Fallout 4|DOOM Eternal|Control|Control Ultimate Edition|Resident Evil 2 (Remake)|Monster Hunter: World|Monster Hunter Rise|Street Fighter 6|Tekken 8|Mortal Kombat 1 (2023)|Mortal Kombat 11|Tom Clancy’s Rainbow Six Siege|The Crew Motorfest|The Crew 2|Far Cry 6|Far Cry 5|Far Cry 4|Far Cry 3|Assassin’s Creed Valhalla|Assassin’s Creed Odyssey|Assassin’s Creed Origins|Assassin’s Creed Mirage|NieR:Automata|Final Fantasy XVI|Final Fantasy VII Remake Intergrade|Persona 5 Royal|Yakuza: Like a Dragon|Judgment|Lost Judgment|Lies of P|Lords of the Fallen (2023)|Dead Space (Remake)|The Callisto Protocol|Gotham Knights|A Plague Tale: Requiem|Mass Effect Legendary Edition|Dragon Age: Inquisition|Dragon Age: Origins|Dragon Age II|Divinity: Original Sin 2|League of Legends|PUBG: Battlegrounds|Rocket League|Fortnite|Forza Horizon 5|Cities: Skylines II|Cities: Skylines|Sid Meier’s Civilization VI|Civilization 7|Age of Empires IV|Age of Empires II: Definitive Edition|Company of Heroes 3|It Takes Two|Outer Wilds|The Outer Worlds 2|The Outer Worlds|Detroit: Become Human|Dragon Ball FighterZ|EA Sports FC 24|FIFA 23|FIFA 22|Gran Turismo Sport|Gran Turismo 6|Battlefield 2042|Battlefield V|Battlefield 1|Battlefield 4|Call of Duty: Modern Warfare III (2023)|Call of Duty: Modern Warfare II (2022)|Call of Duty: Vanguard|Call of Duty: Black Ops Cold War|Far Cry Primal|Assassin’s Creed Syndicate|Assassin’s Creed Unity|Assassin’s Creed III Remastered|Assassin’s Creed II|Assassin’s Creed Brotherhood|Assassin’s Creed Revelations|NieR Replicant ver.1.22474487139...|Final Fantasy XV|Persona 4 Golden|Yakuza 0|Yakuza Kiwami|Yakuza Kiwami 2|Dishonored 2|Dishonored|Prey (2017)|Wolfenstein II: The New Colossus|Wolfenstein: The New Order|Amnesia: The Bunker|Amnesia: Rebirth|Outlast 2|Outlast|Heavy Rain|Beyond: Two Souls|Journey|ABZÛ|Limbo|Inside|Far: Changing Tides|Crysis 3 Remastered|Crysis 2 Remastered|Crysis Remastered|BioShock Infinite|Bioshock 2 Remastered|Bioshock Remastered|Planet Zoo|Planet Coaster|Total War: WARHAMMER III|Total War: WARHAMMER II|Total War: WARHAMMER|Total War: Three Kingdoms|Remnant II|Remnant: From the Ashes|Sifu|Kena: Bridge of Spirits|Ratchet & Clank: Rift Apart|Astro’s Playroom|Grounded|The Quarry|Until Dawn|CyberConnect2 Naruto Shippuden: Ultimate Ninja Storm 4|Dragon Ball Z: Kakarot|One Piece Odyssey|METAL GEAR SOLID V: The Phantom Pain|The Talos Principle II|Avowed|Slay the Spire 2|Light No Fire|Arc Raiders|Ghost of Yōtei|Clair Obscur: Expedition 33|Donkey Kong Bananza|Pokémon Scarlet|Pokémon Violet|Pokémon Sword|Pokémon Shield|Pokémon Legends: Arceus|Fire Emblem Engage|Fire Emblem: Three Houses|Xenoblade Chronicles 3|Xenoblade Chronicles 2|Splatoon 3|Splatoon 2|No Man’s Sky|Subnautica 2|Subnautica: Below Zero|Subnautica|Sea of Thieves|ARK: Survival Ascended|ARK: Survival Evolved|Rust|DayZ|The Sims 4|Need for Speed Unbound|Need for Speed Heat|Dirt Rally 2.0|WRC Generations
 `.trim();
 
-    // Build titles array + extend with sports/annual series
+    /* =========================================================
+       PRODUCT FABRICATION (Price/Discount/Images)
+       ========================================================= */
+    const PLATFORMS = ["PC","PS5","Xbox","Switch"];
+
+    // Stable hash for fallback pricing/discounts
+    function hash(s){ let h=0; for(let i=0;i<s.length;i++) h=(h<<5)-h + s.charCodeAt(i) | 0; return Math.abs(h); }
+
+    // Fallback price formula (used only if no manual PRICE_OVERRIDES match)
+    function priceAuto(title, platform){
+      const base = 2500 + (hash(title + platform) % 6000); // 2500 - 8500
+      return Math.round(base/50)*50; // 50 DA steps
+    }
+
+    // Price lookup with priority: platform override -> generic override -> fallback
+    function priceFor(title, platform){
+      const keyPlatform = `${title}|${platform}`;
+      if(PRICE_OVERRIDES.hasOwnProperty(keyPlatform)) return PRICE_OVERRIDES[keyPlatform];
+      if(PRICE_OVERRIDES.hasOwnProperty(title)) return PRICE_OVERRIDES[title];
+      return priceAuto(title, platform);
+    }
+
+    // Discount lookup: platform override -> generic override -> pseudo-random by title
+    function discountFor(title, platform){
+      const keyPlatform = `${title}|${platform}`;
+      if(DISCOUNT_OVERRIDES.hasOwnProperty(keyPlatform)) return DISCOUNT_OVERRIDES[keyPlatform];
+      if(DISCOUNT_OVERRIDES.hasOwnProperty(title)) return DISCOUNT_OVERRIDES[title];
+      const d=[0,10,12,15,18,20,22,25,30,35,40,45,50,55,60];
+      return d[hash(title)%d.length];
+    }
+
+    // Build full title list (base + annuals)
     const titles = TITLE_BASE.split('|').map(s=>s.trim()).filter(Boolean);
     for(let y=2015; y<=2023; y++) titles.push(`FIFA ${y}`);
     for(let y=2017; y<=2025; y++) titles.push(`NBA 2K${y}`);
@@ -440,33 +512,29 @@ Elden Ring|Elden Ring: Nightreign|Baldur’s Gate 3|Cyberpunk 2077|Red Dead Rede
     for(let y=2018; y<=2024; y++) titles.push(`NHL ${y}`);
     for(let y=2018; y<=2024; y++) titles.push(`MLB The Show ${y}`);
     titles.push("Call of Duty: Modern Warfare (2019)","Call of Duty: Black Ops 6 (2024)");
-    const TITLES = Array.from(new Set(titles)); // dedupe
 
-    /* =========================================================
-       PRODUCT FABRICATION (Price/Discount/Images)
-       ========================================================= */
-    const PLATFORMS = ["PC","PS5","Xbox","Switch"];
-    function hash(s){ let h=0; for(let i=0;i<s.length;i++) h=(h<<5)-h + s.charCodeAt(i) | 0; return Math.abs(h); }
-    function priceFor(name, platform){ const base = 2500 + (hash(name+platform)%6000); return Math.round(base/50)*50; }
-    function discountFor(name){ const d=[0,10,12,15,18,20,22,25,30,35,40,45,50,55,60]; return d[hash(name)%d.length]; }
+    // De-dupe while preserving order
+    const TITLES = Array.from(new Set(titles));
 
+    // Build product variants (per platform + PC Offline)
     const PRODUCTS = [];
     TITLES.forEach(title=>{
-      const manual = COVERS[title] ? thumbProxy(COVERS[title]) : COVER_PLACEHOLDER;
-      const hasManual = Boolean(COVERS[title]);
       PLATFORMS.forEach(p=>{
         PRODUCTS.push({
           id:`${title.replace(/[^a-z0-9]/ig,'_')}_${p}`,
           title, platform:p, name:`${title} (${p})`,
-          price:priceFor(title,p), discount:discountFor(title),
-          img: manual, _needsCover: !hasManual
+          price:priceFor(title,p),
+          discount:discountFor(title,p),
+          img: coverFor(title) // one cover per title (all platforms)
         });
         if(p==="PC"){
           PRODUCTS.push({
             id:`${title.replace(/[^a-z0-9]/ig,'_')}_PC_OFFLINE`,
             title, platform:"PC Offline", name:`${title} (PC Offline)`,
-            price:1000, discount:0,
-            img: manual, _offlineOf:`${title}|PC`, _needsCover: !hasManual
+            price:priceFor(title,"PC Offline"),
+            discount:discountFor(title,"PC Offline"),
+            img: coverFor(title),
+            _offlineOf:`${title}|PC`
           });
         }
       });
@@ -495,17 +563,25 @@ Elden Ring|Elden Ring: Nightreign|Baldur’s Gate 3|Cyberpunk 2077|Red Dead Rede
       renderNextPage();
     }
 
+    function money(n){ return `${n.toLocaleString('en-DZ')} DA`; }
+
     function cardHTML(p){
       return `<article class="card" data-id="${p.id}" data-name="${p.name}" data-price="${p.price}" data-img="${p.img}">
         <div class="thumb" data-thumb-for="${p.id}">
-          <img class="cover" src="${p.img}" alt="${p.title}" loading="lazy" decoding="async" referrerpolicy="no-referrer">
+          <img class="cover"
+               src="${p.img}"
+               alt="${p.title}"
+               loading="lazy"
+               decoding="async"
+               referrerpolicy="no-referrer"
+               onerror="this.onerror=null; this.src='${COVER_PLACEHOLDER}';">
           <span class="platform" title="${p.platform}"></span>
           ${p.discount>0 ? `<span class="badge">${p.discount}% OFF</span>` : ``}
         </div>
         <div class="card-body">
           <h3 class="title">${p.title}</h3>
           <div class="sub">${p.platform}</div>
-          <div class="price">${p.price.toLocaleString('en-DZ')} DA</div>
+          <div class="price">${money(p.price)}</div>
           <div class="actions">
             <button class="btn btn-add">Add to cart</button>
             <button class="btn btn-buy">Buy now</button>
@@ -600,8 +676,6 @@ Elden Ring|Elden Ring: Nightreign|Baldur’s Gate 3|Cyberpunk 2077|Red Dead Rede
     const clearCartBtn = document.getElementById('clearCart');
     const cartBadge = document.getElementById('cartBadge');
 
-    function money(n){ return `${n.toLocaleString('en-DZ')} DA`; }
-
     function renderCart(){
       cartItemsEl.innerHTML = cart.items.map(i=>`
         <div class="cart-item">
@@ -641,8 +715,9 @@ Elden Ring|Elden Ring: Nightreign|Baldur’s Gate 3|Cyberpunk 2077|Red Dead Rede
     }
 
     cartItemsEl.addEventListener('click', (e)=>{
-      const id = e.target.closest('button')?.dataset.id;
-      const act = e.target.closest('button')?.dataset.act;
+      const btn = e.target.closest('button');
+      if(!btn) return;
+      const { id, act } = btn.dataset;
       if(!id || !act) return;
       if(act==='inc') cart.inc(id);
       if(act==='dec') cart.dec(id);
@@ -669,11 +744,8 @@ Elden Ring|Elden Ring: Nightreign|Baldur’s Gate 3|Cyberpunk 2077|Red Dead Rede
       const v = pm.value;
       payInfoLabel.textContent = PAY_INFO[v].label;
       payInfo.innerHTML = PAY_INFO[v].html;
-
-      // Flexy shows extra fields, hides proof
       if(v==='flexy'){ flexyExtraRows.style.display='block'; proofRow.style.display='none'; }
       else { flexyExtraRows.style.display='none'; proofRow.style.display='block'; }
-
       renderCart(); // recalc totals (fee)
     }
     pm.addEventListener('change', onPMChange);
